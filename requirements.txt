@@ -1,0 +1,4 @@
+pyzabbix
+pandas
+matplotlib
+numpy
