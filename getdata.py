@@ -75,6 +75,8 @@ def threading_controller():
     for oneday in handler_datetime():
         time_from, time_till = oneday
         for number in xrange(0, len(hostids)):
+            print "from: %s to: %s hostid: %s cpu: %s memory: %s" % (time_from, time_till, hostids[number],
+                                                                     cpu_usage_itemids[number], memory_useage_itemids[number])
             cpu_day_data = cpu_usage_history_data(hid=hostids[number], itemid=cpu_usage_itemids[number],
                                                   time_from=time_from, time_till=time_till)
             cpu_month_data.append(cpu_day_data)
