@@ -33,8 +33,7 @@ class ZabbixInfoEsxi(object):
             for ip in dellhost.findall(h["name"]):
                 if "10.10.249" in ip:
                     # print(ip)
-                    self.hostidlist.append(h["hostid"])
-                    self.hostipslist.append(ip)
+                    self.hostidlist.append(h["hostid"]), self.hostipslist.append(ip)
         return sorted(self.hostidlist), self.hostipslist
 
     def get_itemid_from_item(self, hostid, key):
