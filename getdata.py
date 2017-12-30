@@ -77,7 +77,7 @@ def threading_controller():
     memory_useage_itemids = zbx.get_itemid_from_item(hostids, "vmware.hv.memory.used[{$URL},{HOST.HOST}]")
 
     # for oneday in handler_datetime():
-    first_line = ["IDC-IP", "CPU-avg/month", "CPU-max/month", "MEM-avg/month", "MEM-max/month"]
+    first_line = ["IDC-IP", "CPU-avg/GHz/month", "CPU-max/GHz/month", "MEM-avg/G/month", "MEM-max/G/month"]
     multidimensional_array.append(first_line)
     for number in xrange(0, len(hostids)):
         # for number in xrange(0, len(hostids)):
