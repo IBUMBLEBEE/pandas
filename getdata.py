@@ -51,7 +51,7 @@ def cpu_usage_history_data(hid, itemid, time_from, time_till):
     history = zapi.do_request("history.get", {"itemids": ["%s" % itemid], "output": "extend", "hostids": "%s" % hid,
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
     for sub in history['result']:
-        datalist.append(sub['value'])
+        datalist.append((sub['value']/(1000*1000*1000)))
     return datalist
 
 
@@ -62,7 +62,7 @@ def memory_usage_history_data(hid, itemid, time_from, time_till):
     history = zapi.do_request("history.get", {"itemids": ["%s" % itemid], "output": "extend", "hostids": "%s" % hid,
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
     for sub in history['result']:
-        datalist.append(sub['value'])
+        datalist.append((sub['value']/(1024*1024*1024)))
     return datalist
 
 
