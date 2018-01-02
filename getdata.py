@@ -73,7 +73,8 @@ def disk_free_history_data(hid, disk_item):
     zapi = ZabbixAPI(url)
     zapi.login(user, password)
     for disk_num in xrange(0, len(hid)):
-        history = zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % hid[disk_num], "key_": disk_item[disk_num], "id": 1})
+        history = zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % hid[disk_num],
+                                               "key_": disk_item[disk_num], "id": 1})
         for sub in history['result']:
             datalist.append(sub['lastvalue'])
     return datalist
