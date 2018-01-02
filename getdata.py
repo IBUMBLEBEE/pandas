@@ -38,7 +38,7 @@ class ZabbixInfoEsxi(object):
 
     def get_itemid_from_item(self, hostid, key):
         for h in hostid:
-            object_itemids = self.zapi.do_request("item.get", {"output": "itemids", "hostids": "%s" % h,
+            object_itemids = self.zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % h,
                                                                "search": {"key_": "%s" % key}})
             self.itemidslist.append(object_itemids["result"][0]["itemid"])
         return self.itemidslist
@@ -50,8 +50,9 @@ def cpu_usage_history_data(hid, itemid, time_from, time_till):
     zapi.login(user, password)
     history = zapi.do_request("history.get", {"itemids": ["%s" % itemid], "output": "extend", "hostids": "%s" % hid,
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
+    # 单位换算：1000*1000*1000 = 1000000000 Hz=>GHz
     for sub in history['result']:
-        datalist.append((sub['value']/(1000*1000*1000)))
+        datalist.append((sub['value']/1000000000))
     return datalist
 
 
@@ -61,24 +62,45 @@ def memory_usage_history_data(hid, itemid, time_from, time_till):
     zapi.login(user, password)
     history = zapi.do_request("history.get", {"itemids": ["%s" % itemid], "output": "extend", "hostids": "%s" % hid,
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
+    # 单位换算：1024*1024*1024 = 1073741824 B=>GB
     for sub in history['result']:
-        datalist.append((sub['value']/(1024*1024*1024)))
+        datalist.append((sub['value']/1073741824))
     return datalist
 
 
-def threading_controller():
+def disk_free_history_data(hid, disk_item):
+    datalist = []
+    zapi = ZabbixAPI(url)
+    zapi.login(user, password)
+    for disk_num in xrange(0, len(hid)):
+        history = zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % hid[disk_num], "key_": disk_item[disk_num], "id": 1})
+        for sub in history['result']:
+            datalist.append(sub['lastvalue'])
+    return datalist
+
+
+# 控制中心
+def controller():
     cpu_month_data = []
     memory_month_data = []
     multidimensional_array = []
+    disk_item_list = ["vmware.hv.datastore.size[{$URL},{HOST.HOST},datastore1,pfree]"]
     zbx = ZabbixInfoEsxi()
     hostids, hostips = zbx.get_host_id()
 
     cpu_usage_itemids = zbx.get_itemid_from_item(hostids, "vmware.hv.cpu.usage[{$URL},{HOST.HOST}]")
     memory_useage_itemids = zbx.get_itemid_from_item(hostids, "vmware.hv.memory.used[{$URL},{HOST.HOST}]")
+    for i in xrange(1, len(hostids)):
+        disk_item_list.append("vmware.hv.datastore.size[{$URL},{HOST.HOST},datastore1(%s),pfree]" % i)
+    disk_free_last_itemids = zbx.get_itemid_from_item(hostids, disk_item_list)
 
     # for oneday in handler_datetime():
     first_line = ["IDC-IP", "CPU-avg/GHz/month", "CPU-max/GHz/month", "MEM-avg/G/month", "MEM-max/G/month"]
     multidimensional_array.append(first_line)
+
+    # Disk
+    disk_last_data = disk_free_history_data(hid=hostids, disk_item=disk_free_last_itemids)
+
     for number in xrange(0, len(hostids)):
         # for number in xrange(0, len(hostids)):
         for oneday in handler_datetime():
@@ -87,21 +109,32 @@ def threading_controller():
             print "from: %s to: %s hostid: %s cpu: %s memory: %s" % \
                   (time_from, time_till, hostids[number], cpu_usage_itemids[number], memory_useage_itemids[number])
 
+            # CPU
             cpu_day_data = cpu_usage_history_data(hid=hostids[number], itemid=cpu_usage_itemids[number],
                                                   time_from=time_from, time_till=time_till)
             cpu_month_data.append(cpu_day_data)
+
+            # memory
             memory_day_data = memory_usage_history_data(hid=hostids[number], itemid=memory_useage_itemids[number],
                                                         time_from=time_from, time_till=time_till)
             memory_month_data.append(memory_day_data)
+
+        # 计算一个月的均值
         cpu_avg_final_data, cpu_max_final_data = calculation_unit(cpu_month_data)
         mem_avg_final_data, mem_max_final_data = calculation_unit(memory_month_data)
+
+        # 构建一维数组
         one_dimensional_array = [hostips[number], cpu_avg_final_data, cpu_max_final_data,
-                                 mem_avg_final_data, mem_max_final_data]
+                                 mem_avg_final_data, mem_max_final_data, disk_last_data[number]]
+
+        # 构建numpy多维数组
         multidimensional_array.append(one_dimensional_array)
+
     write_to_scv(multidimensional_array)
     # return multidimensional_array
 
 
+# 月数据计算单元，计算CPU和MEMORY
 def calculation_unit(list_data):
     list_array = np.array(list_data)
     agv_data = list_array.sum()/list_array.size
@@ -109,12 +142,14 @@ def calculation_unit(list_data):
     return agv_data, max_data
 
 
+# 写入SCV文件
 def write_to_scv(data):
     tmp_data = np.array(data)
     ts = pd.Series(np.arange(tmp_data.shape[-1]), index=tmp_data)
     ts.to_csv("IDC.csv")
 
 
+# 时间处理，间隔为一个月
 def handler_datetime():
     last_month = (datetime.date.today().replace(day=1) - datetime.timedelta(1)).replace(day=1)
     last_days = calendar.monthrange(last_month.year, last_month.month)[-1]
@@ -129,7 +164,7 @@ def handler_datetime():
 
 
 if __name__ == '__main__':
-    threading_controller()
+    controller()
     # zbx = ZabbixInfoEsxi()
     # hostids = zbx.get_host_id()
     # pprint.pprint(hostids)
