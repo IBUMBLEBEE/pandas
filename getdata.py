@@ -173,8 +173,9 @@ def calculation_unit(list_data):
     :param list_data: list
     :return: Maximum and average value
     """
-    list_array = np.array(list_data, dtype=np.float64)
-    agv_data = list_array.sum()/list_array.size
+    print(list_data)
+    list_array = np.array(list_data, dtype=np.float32)
+    agv_data = list_array.sum()/list_array.size()
     # agv_data = list_array.sum
     max_data = list_array.max()
     return agv_data, max_data
