@@ -73,7 +73,7 @@ def cpu_usage_history_data(hid, itemid, time_from, time_till):
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
     # 单位换算：1000*1000*1000 = 1000000000 Hz=>GHz
     for sub in history['result']:
-        datalist.append((int(sub['value'])/1000000000))
+        datalist.append((float(sub['value'])/1000000000))
     return datalist
 
 
@@ -93,7 +93,7 @@ def memory_usage_history_data(hid, itemid, time_from, time_till):
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
     # 单位换算：1024*1024*1024 = 1073741824 B=>GB
     for sub in history['result']:
-        datalist.append(float(int(sub['value'])/1073741824))
+        datalist.append(float(sub['value'])/1073741824)
     return datalist
 
 
@@ -175,6 +175,7 @@ def data_repair(org_data):
     :param org_data: List
     :return: list
     """
+    print(org_data)
     if len(org_data) < 1440:
         last_data = org_data[-1]
         length_repair_data = 1440 - len(org_data)
@@ -196,9 +197,9 @@ def calculation_unit(list_data):
     :param list_data: list
     :return: Maximum and average value
     """
-    print(list_data)
+    # print(list_data)
     list_array = np.array(list_data, dtype=np.float64)
-    agv_data = list_array.sum()/list_array.size()
+    agv_data = list_array.sum()/list_array.size
     # agv_data = list_array.sum
     max_data = list_array.max()
     return agv_data, max_data
