@@ -73,7 +73,7 @@ def cpu_usage_history_data(hid, itemid, time_from, time_till):
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
     # 单位换算：1000*1000*1000 = 1000000000 Hz=>GHz
     for sub in history['result']:
-        datalist.append((float(sub['value'])/1000000000))
+        datalist.append((int(sub['value'])/1000000000))
     return datalist
 
 
@@ -93,7 +93,7 @@ def memory_usage_history_data(hid, itemid, time_from, time_till):
                                               "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
     # 单位换算：1024*1024*1024 = 1073741824 B=>GB
     for sub in history['result']:
-        datalist.append((float(sub['value'])/1073741824))
+        datalist.append(float(int(sub['value'])/1073741824))
     return datalist
 
 
@@ -144,11 +144,13 @@ def controller():
             # CPU
             cpu_day_data = cpu_usage_history_data(hid=hostids[number], itemid=cpu_usage_itemids[number],
                                                   time_from=time_from, time_till=time_till)
+            cpu_day_data = data_repair(cpu_day_data)
             cpu_month_data.append(cpu_day_data)
 
             # memory
             memory_day_data = memory_usage_history_data(hid=hostids[number], itemid=memory_useage_itemids[number],
                                                         time_from=time_from, time_till=time_till)
+            memory_day_data = data_repair(memory_day_data)
             memory_month_data.append(memory_day_data)
 
         # 计算一个月的均值
@@ -166,6 +168,27 @@ def controller():
     # return multidimensional_array
 
 
+# 数据修复部分
+def data_repair(org_data):
+    """
+    当数据大于1440一天数据量时，使用修复保持矩阵维度相等
+    :param org_data: List
+    :return: list
+    """
+    if len(org_data) < 1440:
+        last_data = org_data[-1]
+        length_repair_data = 1440 - len(org_data)
+        new_list = [[last_data]*length_repair_data]
+        complete_data = org_data.extend(new_list)
+        return complete_data
+    elif len(org_data) > 1440:
+        length_repair_data = 1440-len(org_data)
+        complete_data = org_data[:length_repair_data]
+        return complete_data
+    else:
+        pass
+
+
 # 月数据计算单元，计算CPU和MEMORY
 def calculation_unit(list_data):
     """
@@ -174,7 +197,7 @@ def calculation_unit(list_data):
     :return: Maximum and average value
     """
     print(list_data)
-    list_array = np.array(list_data, dtype=np.float32)
+    list_array = np.array(list_data, dtype=np.float64)
     agv_data = list_array.sum()/list_array.size()
     # agv_data = list_array.sum
     max_data = list_array.max()
