@@ -152,10 +152,10 @@ def controller():
         cpu_avg_final_data, cpu_max_final_data = cpu_usage_history_data(hid=hostids[number], time_from=time_from,
                                                                         time_till=time_till)
 
-        print "from: ".format(time_from), " to: ".format(time_till), " hostip: ".format(),\
-              " cpu-avg: ".format(cpu_avg_final_data), " cpu-max: ".format(cpu_max_final_data),\
-              " memory-pfree: ".format(mem_pfree_final_data), " memory-free: ".format(mem_free_final_data),\
-              " Disk: %".format(disk_last_data[number])
+        print "from: {}".format(time_from), " to: {}".format(time_till), " hostip: {}".format(hostips[number]),\
+              " cpu-avg: {}".format(cpu_avg_final_data), " cpu-max: {}".format(cpu_max_final_data),\
+              " memory-pfree: {}%".format(mem_pfree_final_data), " memory-free: {}".format(mem_free_final_data),\
+              " Disk: {}%".format(disk_last_data[number])
 
         # 构建一维数组
         one_dimensional_array = [hostips[number], cpu_avg_final_data, cpu_max_final_data,
