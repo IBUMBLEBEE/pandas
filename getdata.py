@@ -121,8 +121,8 @@ def memory_total_data(hid):
                                                     "search": {"key_": "%s" % memory_usage}})
     memory_usage_last_value = usage_last_value["result"][0]["lastvalue"]
     # print float(memory_total_last_value)/1073741824, memory_usage_last_value
-    memory_pfree_last_value = (float(memory_total_last_value)-float(memory_usage_last_value))\
-                              /float(memory_total_last_value)
+    memory_pfree_last_value = (float(memory_total_last_value)-float(memory_usage_last_value))/\
+                               float(memory_total_last_value)
     memory_free_last_value = float(memory_pfree_last_value)*float(memory_total_last_value)/1073741824
     return memory_pfree_last_value*100, memory_free_last_value
 
