@@ -41,7 +41,7 @@ class ZabbixInfoEsxi(object):
         ip = self.zapi.do_request("host.get", {"filter": {"name": sorted(self.hostipslist)}})
         for tmp in ip["result"]:
             self.hostidlist.append(tmp["hostid"])
-        return self.hostidlist, self.hostipslist
+        return self.hostidlist, sorted(self.hostipslist)
 
     def get_itemid_from_item(self, hostid, key):
         """
@@ -114,6 +114,26 @@ def disk_free_history_data(hid, disk_item):
     return itemidslist
 
 
+def memory_total_data(hid):
+    memory_total = "vmware.hv.hw.memory[{$URL},{HOST.HOST}]"
+    memory_usage = "vmware.hv.memory.used[{$URL},{HOST.HOST}]"
+    zapi = ZabbixAPI(url)
+    zapi.login(user, password)
+
+    total_last_value = zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % hid,
+                                       "search": {"key_": "%s" % memory_total}})
+    memory_total_last_value = total_last_value["result"][0]["lastvalue"]
+
+    usage_last_value = zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % hid,
+                                                    "search": {"key_": "%s" % memory_usage}})
+    memory_usage_last_value = usage_last_value["result"][0]["lastvalue"]
+    print float(memory_total_last_value)/1073741824, memory_usage_last_value
+    memory_pfree_last_value = (float(memory_total_last_value)-float(memory_usage_last_value))\
+                              /float(memory_total_last_value)
+    memory_free_last_value = float(memory_pfree_last_value)*float(memory_total_last_value)/1073741824
+    return memory_pfree_last_value*100, memory_free_last_value
+
+
 # 控制中心
 def controller():
     cpu_month_data = []
@@ -121,6 +141,8 @@ def controller():
     multidimensional_array = []
     zbx = ZabbixInfoEsxi()
     hostids, hostips = zbx.get_host_id()
+    # print(hostids)
+    # print(hostips)
 
     cpu_usage_itemids = zbx.get_itemid_from_item(hostids, "vmware.hv.cpu.usage[{$URL},{HOST.HOST}]")
     memory_useage_itemids = zbx.get_itemid_from_item(hostids, "vmware.hv.memory.used[{$URL},{HOST.HOST}]")
@@ -133,13 +155,17 @@ def controller():
     disk_last_data = disk_free_history_data(hid=hostids, disk_item="pfree")
 
     for number in xrange(0, len(hostids)):
+
+        # 计算所有主机Disk数据
+        mem_pfree_final_data, mem_free_final_data = memory_total_data(hostids[number])
+
         for oneday in handler_datetime():
             time_from, time_till = oneday
 
             # 打印测试数据
-            print "from: %s to: %s hostid: %s cpu: %s memory: %s Disk: %s %s" % \
+            print "from: %s to: %s hostid: %s cpu: %s pfree_memory: %s%s free_memroy: %s Disk: %s%s" % \
                   (time_from, time_till, hostips[number], cpu_usage_itemids[number],
-                   memory_useage_itemids[number], disk_last_data[number], '%')
+                   mem_pfree_final_data, "%", mem_free_final_data, disk_last_data[number], '%')
 
             # CPU
             cpu_day_data = cpu_usage_history_data(hid=hostids[number], itemid=cpu_usage_itemids[number],
@@ -148,18 +174,21 @@ def controller():
             cpu_month_data.append(cpu_day_data)
 
             # memory
-            memory_day_data = memory_usage_history_data(hid=hostids[number], itemid=memory_useage_itemids[number],
-                                                        time_from=time_from, time_till=time_till)
-            memory_day_data = data_repair(memory_day_data)
-            memory_month_data.append(memory_day_data)
+            # memory_day_data = memory_usage_history_data(hid=hostids[number], itemid=memory_useage_itemids[number],
+            #                                             time_from=time_from, time_till=time_till)
+            # memory_day_data = data_repair(memory_day_data)
+            # memory_month_data.append(memory_day_data)
 
-        # 计算一个月的均值
+        # 计算CPU一个月均值
         cpu_avg_final_data, cpu_max_final_data = calculation_unit(cpu_month_data)
-        mem_avg_final_data, mem_max_final_data = calculation_unit(memory_month_data)
+        # mem_avg_final_data, mem_max_final_data = calculation_unit(memory_month_data)
+
+        # 计算所有主机Disk数据
+        # mem_pfree_final_data, mem_free_final_data = memory_total_data(hostids[number])
 
         # 构建一维数组
         one_dimensional_array = [hostips[number], cpu_avg_final_data, cpu_max_final_data,
-                                 mem_avg_final_data, mem_max_final_data, disk_last_data[number]]
+                                 mem_pfree_final_data, mem_free_final_data, disk_last_data[number]]
 
         # 构建numpy多维数组
         multidimensional_array.append(one_dimensional_array)
