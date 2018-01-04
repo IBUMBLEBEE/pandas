@@ -4,6 +4,7 @@
 import calendar
 import datetime
 import multiprocessing
+import mysql.connector
 import numpy as np
 from pyzabbix import ZabbixAPI
 import pandas as pd
@@ -57,52 +58,39 @@ class ZabbixInfoEsxi(object):
         return self.itemidslist
 
 
-def cpu_usage_history_data(hid, itemid, time_from, time_till):
+def cpu_usage_history_data(hid, time_from, time_till):
     """
     Get cpu history data
     :param hid: string
-    :param itemid: string
     :param time_from: start timestamp
     :param time_till: end timestamp
     :return: a day data, list
     """
+    cpu_usage_item = "vmware.hv.cpu.usage[{$URL},{HOST.HOST}]"
     datalist = []
     zapi = ZabbixAPI(url)
     zapi.login(user, password)
-    history = zapi.do_request("history.get", {"itemids": ["%s" % itemid], "output": "extend", "hostids": "%s" % hid,
-                                              "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
-    # 单位换算：1000*1000*1000 = 1000000000 Hz=>GHz
-    for sub in history['result']:
-        datalist.append((float(sub['value'])/1000000000))
-    return datalist
-
-
-def memory_usage_history_data(hid, itemid, time_from, time_till):
-    """
-    Get memory history data
-    :param hid: string
-    :param itemid: string
-    :param time_from: start timestamp
-    :param time_till: end timestamp
-    :return: a day data, list
-    """
-    datalist = []
-    zapi = ZabbixAPI(url)
-    zapi.login(user, password)
-    history = zapi.do_request("history.get", {"itemids": ["%s" % itemid], "output": "extend", "hostids": "%s" % hid,
-                                              "time_from": "%s" % time_from, "time_till": "%s" % time_till, "id": 1})
-    # 单位换算：1024*1024*1024 = 1073741824 B=>GB
-    for sub in history['result']:
-        datalist.append(float(sub['value'])/1073741824)
-    return datalist
+    itemid_obj = zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % hid,
+                                                    "search": {"key_": "%s" % cpu_usage_item}})
+    itemid = itemid_obj["result"][0]["itemid"]
+    cnx = mysql.connector.connect(host="10.10.255.253", user="root", password="n%KAuOa847ga", database="zabbix")
+    cursor = cnx.cursor(buffered=True)
+    query = ('''SELECT `value` FROM zabbix.history_uint WHERE itemid = %s AND clock >= %s AND clock <= %s''')
+    cursor.execute(query, (itemid, time_from, time_till))
+    for value in cursor:
+        datalist.append(value[0])
+    cursor.close()
+    cnx.close()
+    cpu_agv_data, cpu_max_data = calculation_unit(datalist)
+    return cpu_agv_data, cpu_max_data
 
 
 def disk_free_history_data(hid, disk_item):
     """
-
+    Get memory last data
     :param hid: list
     :param disk_item: string
-    :return: Free space on datastore (percentage)(last value)
+    :return: Free space on datastore (percentage)(last value), list
     """
     itemidslist = []
     zapi = ZabbixAPI(url)
@@ -115,6 +103,11 @@ def disk_free_history_data(hid, disk_item):
 
 
 def memory_total_data(hid):
+    """
+    Get memory last data
+    :param hid:
+    :return:
+    """
     memory_total = "vmware.hv.hw.memory[{$URL},{HOST.HOST}]"
     memory_usage = "vmware.hv.memory.used[{$URL},{HOST.HOST}]"
     zapi = ZabbixAPI(url)
@@ -127,7 +120,7 @@ def memory_total_data(hid):
     usage_last_value = zapi.do_request("item.get", {"output": "extend", "hostids": "%s" % hid,
                                                     "search": {"key_": "%s" % memory_usage}})
     memory_usage_last_value = usage_last_value["result"][0]["lastvalue"]
-    print float(memory_total_last_value)/1073741824, memory_usage_last_value
+    # print float(memory_total_last_value)/1073741824, memory_usage_last_value
     memory_pfree_last_value = (float(memory_total_last_value)-float(memory_usage_last_value))\
                               /float(memory_total_last_value)
     memory_free_last_value = float(memory_pfree_last_value)*float(memory_total_last_value)/1073741824
@@ -136,19 +129,15 @@ def memory_total_data(hid):
 
 # 控制中心
 def controller():
-    cpu_month_data = []
-    memory_month_data = []
     multidimensional_array = []
     zbx = ZabbixInfoEsxi()
     hostids, hostips = zbx.get_host_id()
-    # print(hostids)
-    # print(hostips)
 
-    cpu_usage_itemids = zbx.get_itemid_from_item(hostids, "vmware.hv.cpu.usage[{$URL},{HOST.HOST}]")
-    memory_useage_itemids = zbx.get_itemid_from_item(hostids, "vmware.hv.memory.used[{$URL},{HOST.HOST}]")
+    # 时间处理
+    time_from, time_till = handler_datetime()
 
-    # for oneday in handler_datetime():
-    first_line = ["IDC-IP", "CPU-avg/GHz/month", "CPU-max/GHz/month", "MEM-avg/G/month", "MEM-max/G/month"]
+    first_line = ["IDC-IP", "CPU-avg/GHz/month", "CPU-max/GHz/month", "MEM-pfree/%/last",
+                  "MEM-free/GB/last", "Disk-free/GB/last"]
     multidimensional_array.append(first_line)
 
     # Disk
@@ -156,35 +145,17 @@ def controller():
 
     for number in xrange(0, len(hostids)):
 
-        # 计算所有主机Disk数据
+        # Memory
         mem_pfree_final_data, mem_free_final_data = memory_total_data(hostids[number])
 
-        for oneday in handler_datetime():
-            time_from, time_till = oneday
+        # CPU
+        cpu_avg_final_data, cpu_max_final_data = cpu_usage_history_data(hid=hostids[number], time_from=time_from,
+                                                                        time_till=time_till)
 
-            # 打印测试数据
-            print "from: %s to: %s hostid: %s cpu: %s pfree_memory: %s%s free_memroy: %s Disk: %s%s" % \
-                  (time_from, time_till, hostips[number], cpu_usage_itemids[number],
-                   mem_pfree_final_data, "%", mem_free_final_data, disk_last_data[number], '%')
-
-            # CPU
-            cpu_day_data = cpu_usage_history_data(hid=hostids[number], itemid=cpu_usage_itemids[number],
-                                                  time_from=time_from, time_till=time_till)
-            cpu_day_data = data_repair(cpu_day_data)
-            cpu_month_data.append(cpu_day_data)
-
-            # memory
-            # memory_day_data = memory_usage_history_data(hid=hostids[number], itemid=memory_useage_itemids[number],
-            #                                             time_from=time_from, time_till=time_till)
-            # memory_day_data = data_repair(memory_day_data)
-            # memory_month_data.append(memory_day_data)
-
-        # 计算CPU一个月均值
-        cpu_avg_final_data, cpu_max_final_data = calculation_unit(cpu_month_data)
-        # mem_avg_final_data, mem_max_final_data = calculation_unit(memory_month_data)
-
-        # 计算所有主机Disk数据
-        # mem_pfree_final_data, mem_free_final_data = memory_total_data(hostids[number])
+        print "from: ".format(time_from), " to: ".format(time_till), " hostip: ".format(),\
+              " cpu-avg: ".format(cpu_avg_final_data), " cpu-max: ".format(cpu_max_final_data),\
+              " memory-pfree: ".format(mem_pfree_final_data), " memory-free: ".format(mem_free_final_data),\
+              " Disk: %".format(disk_last_data[number])
 
         # 构建一维数组
         one_dimensional_array = [hostips[number], cpu_avg_final_data, cpu_max_final_data,
@@ -197,28 +168,6 @@ def controller():
     # return multidimensional_array
 
 
-# 数据修复部分
-def data_repair(org_data):
-    """
-    当数据大于1440一天数据量时，使用修复保持矩阵维度相等
-    :param org_data: List
-    :return: list
-    """
-    print(org_data)
-    if len(org_data) < 1440:
-        last_data = org_data[-1]
-        length_repair_data = 1440 - len(org_data)
-        new_list = [[last_data]*length_repair_data]
-        complete_data = org_data.extend(new_list)
-        return complete_data
-    elif len(org_data) > 1440:
-        length_repair_data = 1440-len(org_data)
-        complete_data = org_data[:length_repair_data]
-        return complete_data
-    else:
-        pass
-
-
 # 月数据计算单元，计算CPU和MEMORY
 def calculation_unit(list_data):
     """
@@ -228,9 +177,10 @@ def calculation_unit(list_data):
     """
     # print(list_data)
     list_array = np.array(list_data, dtype=np.float64)
-    agv_data = list_array.sum()/list_array.size
+    # print(list_array.sum(), list_array.size)
+    agv_data = (list_array.sum()/list_array.size)/(1000*1000*1000)
     # agv_data = list_array.sum
-    max_data = list_array.max()
+    max_data = list_array.max()/(1000*1000*1000)
     return agv_data, max_data
 
 
@@ -254,16 +204,14 @@ def handler_datetime():
     """
     last_month = (datetime.date.today().replace(day=1) - datetime.timedelta(1)).replace(day=1)
     last_days = calendar.monthrange(last_month.year, last_month.month)[-1]
-    last_month_timestamp = []
-    for day_number in xrange(1, (int(last_days)+1)):
-        start_time = '%s-%s-%s 00:00:00' % (last_month.year, last_month.month, day_number)
-        end_time = '%s-%s-%s 23:59:59' % (last_month.year, last_month.month, day_number)
-        start = str(time.mktime(time.strptime(start_time, '%Y-%m-%d %H:%M:%S'))).split('.')[0]
-        end = str(time.mktime(time.strptime(end_time, '%Y-%m-%d %H:%M:%S'))).split('.')[0]
-        last_month_timestamp.append((start, end))
-    return last_month_timestamp
+    first_day = '%s-%s-%s 00:00:00' % (last_month.year, last_month.month, last_month.day)
+    last_day = '%s-%s-%s 23:59:59' % (last_month.year, last_month.month, last_days)
+    start = str(time.mktime(time.strptime(first_day, '%Y-%m-%d %H:%M:%S'))).split('.')[0]
+    end = str(time.mktime(time.strptime(last_day, '%Y-%m-%d %H:%M:%S'))).split('.')[0]
+    return start, end
 
 
 if __name__ == '__main__':
     controller()
+    # print(handler_datetime())
 
