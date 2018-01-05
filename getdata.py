@@ -213,5 +213,3 @@ def handler_datetime():
 
 if __name__ == '__main__':
     controller()
-    # print(handler_datetime())
-
