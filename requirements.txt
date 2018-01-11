@@ -6,3 +6,5 @@ xlrd
 xlutils
 openpyxl
 xlsxwriter
+openpyxl
+string
