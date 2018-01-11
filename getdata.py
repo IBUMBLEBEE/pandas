@@ -3,18 +3,25 @@
 
 import calendar
 import datetime
-import multiprocessing
 import mysql.connector
 import numpy as np
 from pyzabbix import ZabbixAPI
-import pandas as pd
 import re
 import time
+import string
+from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment
+from openpyxl import Workbook
 
 
 url = "http://10.10.255.253:8080"
 user = "Admin"
 password = "zabbix!253."
+
+# 颜色设置
+thin = Side(border_style="thin", color="000000")
+double = Side(border_style="double", color="ff0000")
+border = Border(top=double, left=thin, right=thin, bottom=double)
+fill = PatternFill("solid", fgColor="1E90FF")
 
 
 class ZabbixInfoEsxi(object):
@@ -127,6 +134,69 @@ def memory_total_data(hid):
     return memory_pfree_last_value*100, memory_free_last_value
 
 
+# 写入 excel
+def write_to_excel(data):
+    """
+    使用numpy模块属性写入文件csv
+    :param data: numpy的多维数组写入文件
+    :return: None
+    """
+    wb = Workbook()
+    sheet = wb.active
+    sheet.title = "Dell Server info"
+
+    for row in xrange(0, len(data)):
+        col = [string.capwords(letter) for letter in string.lowercase][0:len(data[row])]
+        style_range(sheet, '%s%d:%s%d' % (col[0], 1, col[-1], 1), fill=fill)
+        for column in col:
+            sheet['%s%d' % (column, 1)].alignment = Alignment(horizontal='center', vertical='center')
+        for col_num in xrange(0, len(col)):
+            sheet.column_dimensions['%s' % col[col_num]].width = float(19.13)
+            sheet['%s%d' % (col[col_num], row+1)] = data[row][col_num]
+    wb.save(r'idc.xlsx')
+
+
+# excel 单元格处理
+def style_range(ws, cell_range, border=Border(), fill=None, font=None, alignment=None):
+    """
+    Apply styles to a range of cells as if they were a single cell.
+
+    :param ws:  Excel worksheet instance
+    :param range: An excel range to style (e.g. A1:F20)
+    :param border: An openpyxl Border 边框
+    :param fill: An openpyxl PatternFill or GradientFill 填充和合并
+    :param font: An openpyxl Font object 字体
+    """
+
+    top = Border(top=border.top)
+    left = Border(left=border.left)
+    right = Border(right=border.right)
+    bottom = Border(bottom=border.bottom)
+
+    first_cell = ws[cell_range.split(":")[0]]
+    if alignment:
+        ws.merge_cells(cell_range)
+        first_cell.alignment = alignment
+
+    rows = ws[cell_range]
+    if font:
+        first_cell.font = font
+
+    for cell in rows[0]:
+        cell.border = cell.border + top
+    for cell in rows[-1]:
+        cell.border = cell.border + bottom
+
+    for row in rows:
+        l = row[0]
+        r = row[-1]
+        l.border = l.border + left
+        r.border = r.border + right
+        if fill:
+            for c in row:
+                c.fill = fill
+
+
 # 控制中心
 def controller():
     multidimensional_array = []
@@ -158,13 +228,13 @@ def controller():
               " Disk: {}%".format(disk_last_data[number])
 
         # 构建一维数组
-        one_dimensional_array = [hostips[number], cpu_avg_final_data, cpu_max_final_data,
-                                 mem_pfree_final_data, mem_free_final_data, disk_last_data[number]]
+        one_dimensional_array = (hostips[number], cpu_avg_final_data, cpu_max_final_data,
+                                 mem_pfree_final_data, mem_free_final_data, disk_last_data[number])
 
-        # 构建numpy多维数组
+        # 构建多维数组
         multidimensional_array.append(one_dimensional_array)
 
-    write_to_scv(multidimensional_array)
+    write_to_excel(multidimensional_array)
     # return multidimensional_array
 
 
@@ -182,18 +252,6 @@ def calculation_unit(list_data):
     # agv_data = list_array.sum
     max_data = list_array.max()/(1000*1000*1000)
     return agv_data, max_data
-
-
-# 写入SCV文件
-def write_to_scv(data):
-    """
-    使用numpy模块属性写入文件csv
-    :param data: numpy的多维数组写入文件
-    :return: None
-    """
-    tmp_data = np.array(data)
-    ts = pd.Series(np.arange(tmp_data.shape[-1]), index=tmp_data)
-    ts.to_csv("IDC.csv")
 
 
 # 时间处理，间隔为一个月
