@@ -8,3 +8,6 @@ openpyxl
 xlsxwriter
 openpyxl
 string
+pyVmomi
+pyVim
+atexit
