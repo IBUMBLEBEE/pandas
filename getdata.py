@@ -207,6 +207,16 @@ def style_range(ws, cell_range, border=Border(), fill=None, font=None, alignment
 
 
 def connect_vc_return_data(vc_host, vc_user, vc_password, vc_port, start, end):
+    """
+    Connect vcenter data Dell server performance data.
+    :param vc_host: vcenter host. string
+    :param vc_user: vcenter user. string
+    :param vc_password: vcenter password. string
+    :param vc_port: vcenter port. string
+    :param start: The starting time for collecting data. datetime
+    :param end: The data collection end time. datetime
+    :return: dict, as {'172.30.10.1': '1520'}
+    """
     mydata = {}
 
     # Connect to the host without NoSSL signing
@@ -252,14 +262,12 @@ def connect_vc_return_data(vc_host, vc_user, vc_password, vc_port, start, end):
     # Loop through all the VMs
     for child in children:
         # Get all available metric IDs for this VM
-        print(child)
         counterIDs = [m.counterId for m in
                       perfManager.QueryAvailablePerfMetric(entity=child)]
-        print(counterIDs)
         # Using the IDs form a list of MetricId
         # objects for building the Query Spec
         metricIDs = [vim.PerformanceManager.MetricId(counterId=c, instance="*") for c in counterIDs]
-        # print(metricIDs)
+
         # Build the specification to be used
         # for querying the performance manager
         spec = vim.PerformanceManager.QuerySpec(entity=child,
@@ -275,7 +283,7 @@ def connect_vc_return_data(vc_host, vc_user, vc_password, vc_port, start, end):
             for val in result[0].value:
                 if counterInfo.keys()[counterInfo.values().index(val.id.counterId)] == 'disk.usage.average':
                     mydata['%s' % child.summary.config.name] = '%s' % str(val.value[0])
-                    return mydata
+    return mydata
 
 
 # 控制中心
@@ -298,9 +306,9 @@ def controller():
     # return data from prd vcenter
     diskio = connect_vc_return_data(vc_host=vcenter_host, vc_user=vcenter_user, vc_password=vcenter_password,
                                     vc_port=vcenter_port, start=start_time, end=end_time)
+    print(diskio)
 
     for number in xrange(0, len(hostids)):
-
         # Memory
         mem_pfree_final_data, mem_free_final_data = memory_total_data(hostids[number])
 
@@ -311,7 +319,7 @@ def controller():
         print "from: {}".format(time_from), " to: {}".format(time_till), " hostip: {}".format(hostips[number]),\
               " cpu-avg: {}".format(cpu_avg_final_data), " cpu-max: {}".format(cpu_max_final_data),\
               " memory-pfree: {}%".format(mem_pfree_final_data), " memory-free: {}".format(mem_free_final_data),\
-              " Disk: {}%".format(disk_last_data[number])
+              " Disk: {}%".format(disk_last_data[number]), " I/O: {}KBps".format(diskio['{}'.format(hostips[number])])
 
         # 构建一维数组
         one_dimensional_array = (hostips[number], cpu_avg_final_data, cpu_max_final_data,
