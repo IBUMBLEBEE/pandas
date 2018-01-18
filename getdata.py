@@ -17,13 +17,13 @@ from pyVim.connect import SmartConnectNoSSL, Disconnect
 import atexit
 
 
-url = "http://10.10.255.253:8080"
+url = "http://exmaple"
 user = "Admin"
-password = "zabbix!253."
+password = "**********"
 
-vcenter_host = '10.10.255.2'
-vcenter_user = 'root'
-vcenter_password = '(7lF&O14$z,K'
+vcenter_host = 'vcenter ip'
+vcenter_user = 'vcenter user'
+vcenter_password = '************'
 vcenter_port = 443
 
 # 颜色设置
