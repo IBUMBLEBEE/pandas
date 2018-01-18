@@ -323,8 +323,8 @@ def controller():
 
         # 构建一维数组
         one_dimensional_array = (hostips[number], cpu_avg_final_data, cpu_max_final_data,
-                                 mem_pfree_final_data, mem_free_final_data, disk_last_data[number],
-                                 diskio['{}'.format(hostips[number])])
+                                 mem_pfree_final_data, mem_free_final_data, float(disk_last_data[number]),
+                                 float(diskio['{}'.format(hostips[number])]))
 
         # 构建多维数组
         multidimensional_array.append(one_dimensional_array)
