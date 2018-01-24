@@ -11,3 +11,4 @@ string
 pyVmomi
 pyVim
 atexit
+PythonConfluenceAPI

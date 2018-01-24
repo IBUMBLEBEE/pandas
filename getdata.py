@@ -9,21 +9,22 @@ from pyzabbix import ZabbixAPI
 import re
 import time
 import string
-from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment
-from openpyxl import Workbook
+from openpyxl.styles import Border, Side, PatternFill, Font, GradientFill, Alignment, colors
+from openpyxl import Workbook, load_workbook
 
 from pyVmomi import vim
 from pyVim.connect import SmartConnectNoSSL, Disconnect
+import random
 import atexit
 
 
-url = "http://exmaple"
+url = "http://10.10.255.253:8080"
 user = "Admin"
-password = "**********"
+password = "zabbix!253."
 
-vcenter_host = 'vcenter ip'
-vcenter_user = 'vcenter user'
-vcenter_password = '************'
+vcenter_host = '10.10.255.2'
+vcenter_user = 'root'
+vcenter_password = '(7lF&O14$z,K'
 vcenter_port = 443
 
 # 颜色设置
@@ -72,6 +73,74 @@ class ZabbixInfoEsxi(object):
                                                                "search": {"key_": "%s" % key}})
             self.itemidslist.append(object_itemids["result"][0]["itemid"])
         return self.itemidslist
+
+
+class FillExcel(object):
+    def __init__(self, filename):
+        """
+        填充Excel表格
+        :param filename: 读取文件路径，string
+        """
+        self.filename = filename
+        self.wb = load_workbook(self.filename)
+        self.ws = self.wb.active
+        self.value_info = dict()
+        self.read_excel_data()
+
+    def read_excel_data(self):
+        """
+        读取生成的Excel
+        :return: None
+        """
+        columns = [string.capwords(letter) for letter in string.lowercase[0:self.ws.max_column]]
+        print(self.ws.max_row, columns)
+        for column in columns:
+            if column != 'A' and 'free' not in self.ws['%s1' % column].value:
+                self.compete_excel_unit_used(column, [row for row in xrange(2, self.ws.max_row+1)])
+            elif column != 'A' and 'free' in self.ws['%s1' % column].value:
+                self.compete_excel_unit_free(column, [row for row in xrange(2, self.ws.max_row+1)])
+            else:
+                pass
+
+    def compete_excel_unit_used(self, col, rows):
+        """
+        对已使用的参数进行颜色填充，如CPU平均值和最大值，磁盘IO的最大值
+        :param col: Excel列, string
+        :param rows: Excel行，list
+        :return: None
+        """
+        for row1 in rows:
+            self.value_info['%s%s' % (col, row1)] = self.ws['%s%s' % (col, row1)].value
+        tmp_list = sorted(self.value_info.values(), reverse=True)[0:3]
+        for key1 in self.value_info.keys():
+            if self.value_info[key1] >= min(tmp_list):
+                self.ws[key1].font = Font(color=colors.RED, italic=True)
+            else:
+                pass
+
+    def compete_excel_unit_free(self, col, rows):
+        """
+        对剩余的参数进行颜色填充，如内存剩余百分比和内存剩余GB，磁盘剩余百分比
+        :param col: Excel列, string
+        :param rows: Excel行，list
+        :return: None
+        """
+        for row1 in rows:
+            self.value_info['%s%s' % (col, row1)] = self.ws['%s%s' % (col, row1)].value
+        tmp_list = sorted(self.value_info.values(), reverse=True)[0:5]
+        for key1 in self.value_info.keys():
+            if self.value_info[key1] >= min(tmp_list):
+                self.ws[key1].font = Font(color=colors.DARKGREEN, italic=True)
+            else:
+                pass
+
+    def save_excel_file(self, save_filename):
+        """
+        保存文件
+        :param save_filename: 保存文件路径, string
+        :return: None
+        """
+        self.wb.save(save_filename)
 
 
 def cpu_usage_history_data(hid, time_from, time_till):
@@ -138,7 +207,7 @@ def memory_total_data(hid):
     memory_usage_last_value = usage_last_value["result"][0]["lastvalue"]
     # print float(memory_total_last_value)/1073741824, memory_usage_last_value
     memory_pfree_last_value = (float(memory_total_last_value)-float(memory_usage_last_value))/\
-                               float(memory_total_last_value)
+                              float(memory_total_last_value)
     memory_free_last_value = float(memory_pfree_last_value)*float(memory_total_last_value)/1073741824
     return memory_pfree_last_value*100, memory_free_last_value
 
@@ -171,7 +240,7 @@ def style_range(ws, cell_range, border=Border(), fill=None, font=None, alignment
     Apply styles to a range of cells as if they were a single cell.
 
     :param ws:  Excel worksheet instance
-    :param range: An excel range to style (e.g. A1:F20)
+    :param cell_range: An excel range to style (e.g. A1:F20)
     :param border: An openpyxl Border 边框
     :param fill: An openpyxl PatternFill or GradientFill 填充和合并
     :param font: An openpyxl Font object 字体
@@ -296,7 +365,7 @@ def controller():
     time_from, time_till = handler_datetime()
 
     first_line = ["IDC-IP", "CPU-avg/GHz/month", "CPU-max/GHz/month", "MEM-pfree/%/last",
-                  "MEM-free/GB/last", "Disk-free/GB/last", "Disk-I/O KBps/avg"]
+                  "MEM-free/GB/last", "Disk-pfree/%/last", "Disk-I/O KBps/avg"]
     multidimensional_array.append(first_line)
 
     # Disk Info 计算磁盘最新剩余和磁盘I/O
@@ -330,6 +399,10 @@ def controller():
         multidimensional_array.append(one_dimensional_array)
 
     write_to_excel(multidimensional_array)
+
+    # 充填Excel字体
+    fill_excel = FillExcel('idc.xlsx')
+    fill_excel.save_excel_file('idc%s.xlsx' % random.randrange(20, 100, 1))
     # return multidimensional_array
 
 
@@ -342,9 +415,7 @@ def calculation_unit(list_data):
     """
     # print(list_data)
     list_array = np.array(list_data, dtype=np.float64)
-    # print(list_array.sum(), list_array.size)
     agv_data = (list_array.sum()/list_array.size)/(1000*1000*1000)
-    # agv_data = list_array.sum
     max_data = list_array.max()/(1000*1000*1000)
     return agv_data, max_data
 
