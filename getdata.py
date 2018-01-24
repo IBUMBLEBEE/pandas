@@ -93,7 +93,7 @@ class FillExcel(object):
         :return: None
         """
         columns = [string.capwords(letter) for letter in string.lowercase[0:self.ws.max_column]]
-        print(self.ws.max_row, columns)
+
         for column in columns:
             if column != 'A' and 'free' not in self.ws['%s1' % column].value:
                 self.compete_excel_unit_used(column, [row for row in xrange(2, self.ws.max_row+1)])
