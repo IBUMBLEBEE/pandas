@@ -18,13 +18,13 @@ import random
 import atexit
 
 
-url = "http://10.10.255.253:8080"
+url = "http://ip:port"
 user = "Admin"
-password = "zabbix!253."
+password = "*******"
 
-vcenter_host = '10.10.255.2'
-vcenter_user = 'root'
-vcenter_password = '(7lF&O14$z,K'
+vcenter_host = 'ip'
+vcenter_user = 'user'
+vcenter_password = '********'
 vcenter_port = 443
 
 # 颜色设置
